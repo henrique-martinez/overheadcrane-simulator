@@ -6,9 +6,9 @@ from matplotlib import cm
 from IPython.display import clear_output
 
 class state:
-    m = 0.5
-    M = 1.0
-    D = 10.0
+    m = 0.2
+    M = 1
+    D = 0.2
     g = 9.8
 
     def __init__(self, x0, dx0, l0, dl0, theta0, dtheta0):
@@ -18,6 +18,18 @@ class state:
         self.dl = dl0
         self.theta = theta0
         self.dtheta = dtheta0
+
+        self.ddx = 0
+        self.ddl = 0
+        self.ddtheta = 0
+
+        self.f1 = 0
+        self.f2 = 0
+        self.df1 = 0
+        self.df2 = 0
+
+    def sigmoid(self, lamb, t):
+        return (1-np.exp(-lamb*t))/(1+np.exp(-lamb*t))
     
     def T(self):
         return 0.5*self.M*self.dx**2 + 0.5*self.m*(self.l**2*self.dtheta**2 + self.dx**2 - 2*self.l*self.dx*self.dtheta*np.cos(self.theta)+self.dl**2-2*self.dl*self.dx*np.sin(self.theta))
@@ -34,7 +46,7 @@ class state:
         self.ddtheta = np.cos(self.theta)*(f1 - self.D*self.dx + f2*np.sin(self.theta))/(self.M*self.l) - 2*self.dl*self.dtheta/self.l - self.g*np.sin(self.theta)/self.l
         # print(self.ddx, self.ddl, self.ddtheta)
 
-    def control(self, mode):
+    def control(self, mode, dt):
         if mode == "zero":
             return 0, 0
         if mode == "pendulo":
@@ -42,13 +54,29 @@ class state:
             f2 = (self.m*self.M)/(self.M + self.m*np.sin(self.theta)**2)*((self.D*self.dx*np.sin(self.theta)/self.M)-(self.l*self.dtheta**2 + self.g*np.cos(self.theta)))
             return f1, f2
         if mode == "sliding":
-            f1 = 0
-            f2 = 0
-            return f1, f2
+            lamb = 2
+            x_d, l_d = 0.5, 0.5
+            epsilon1, k1 = 5, 5
+            epsilon2, k2 = 0.03, 28
+            a_x, b_x, a_t, b_t = 20, 8, 7, 140
+            s1 = self.ddx + a_x * self.dx + b_x * (self.x - x_d) + a_t * self.dtheta + b_t * self.theta
+            a_l, b_l = 15, 36
+            s2 = self.ddl + a_l * self.dl + b_l * (self.l - l_d)
+
+            df1 = -np.sin(self.theta)*self.df2 + (self.D/self.M) * (self.f1 - self.D * self.dx + self.f2 * np.sin(self.theta)) - self.dtheta*np.cos(self.theta)*self.f2 - self.M*(a_x*self.ddx + b_x*self.dx + a_t*self.ddtheta + b_t*self.dtheta + epsilon1*self.sigmoid(lamb, s1)+k1*s1)
+            df2 = -self.df1*self.m*np.sin(self.theta)/(self.M + self.m*np.sin(self.theta)**2) - ((self.M*self.m)/(self.M + self.m*np.sin(self.theta)**2))*(((self.f2*self.dtheta*np.sin(2*self.theta))/self.M)+((self.M*(self.f1-self.D*self.dx)*self.dtheta*np.cos(self.theta)-self.D*(self.f1 - self.D * self.dx + self.f2 * np.sin(self.theta))*np.sin(self.theta))/self.M**2)-self.g*self.dtheta*np.sin(self.theta)+self.dl*self.dtheta**2+2*self.l*self.dtheta*self.ddtheta+a_l*self.ddl+b_l*self.dl+epsilon2*self.sigmoid(lamb, s2)+k2*s2)
+
+            self.df1 = df1
+            self.df2 = df2
+
+            self.f1 = self.f1 + self.df1 * dt
+            self.f2 = self.f2 + self.df2 * dt
+
+            return self.f1, self.f2
         return 0, 0
 
     def integrate(self, dt):
-        f1, f2 = self.control("pendulo")
+        f1, f2 = self.control("sliding", dt)
         self.model(f1, f2)
         x = self.x + self.dx * dt
         dx = self.dx + self.ddx * dt
@@ -59,17 +87,17 @@ class state:
         return state(x, dx, l, dl, theta, dtheta)
 
 x0 = 0
-dx0 = 0.1
+dx0 = 0
 l0 = 0.35
 dl0 = 0
-theta0 = 0.05
+theta0 = 0.3
 dtheta0 = 0
 
 v0 = state(x0, dx0, l0, dl0, theta0, dtheta0)
 v = [v0]
 
 dt = 0.001
-tf = 5
+tf = 20
 t = np.linspace(0, tf, int(tf/dt))
 for _ in range(len(t)):
     v.append(v[-1].integrate(dt))
@@ -105,11 +133,13 @@ plt.show()
 # animate positions
 plt.ion()
 fig, ax = plt.subplots()
-positions = [positions[i] for i in range(0, len(positions), 100)]
+positions = [positions[i] for i in range(0, len(positions), 200)]
 pos = positions[0]
-line, = ax.plot([pos[0][0], pos[1][0]], [pos[0][1], pos[1][1]], color=cm.viridis(0), marker='o')
+baseline, = ax.plot([-0.6, 0.6], [0, 0], color='black', marker='.')
+line, = ax.plot([pos[0][0], pos[1][0]], [pos[0][1], pos[1][1]], color=cm.viridis(0), marker='o', linestyle='dashed')
 for i in range(0, len(positions)):
     pos = positions[i]
+    line, = ax.plot([pos[0][0], pos[1][0]], [pos[0][1], pos[1][1]], color=cm.viridis(0), marker='o', linestyle='dashed')
     line.set_xdata([pos[0][0], pos[1][0]])
     line.set_ydata([pos[0][1], pos[1][1]])
     line.set_color(cm.viridis(i/len(positions)))
@@ -153,24 +183,3 @@ ax.set_ylabel("energia [J]")
 ax.set_xlabel("tempo [s]")
 ax.legend()
 plt.show()
-
-#######################################################
-'''import pygame 
-
-pygame.init()
-
-surface = pygame.display.set_mode((800,400))
-
-trolley = pygame.Rect(400+v0.x, 30, 60, 40)
-charge = pygame.Rect(400+v0.x-1000*v0.l*np.sin(v0.theta), 1000*v0.l*np.cos(v0.theta), 10, 10)
-
-
-for s in v:
-    surface.fill((0,0,0))
-    pygame.draw.rect(surface, (255,0,0), trolley)
-    pygame.draw.rect(surface, (0,255,0), charge)
-    trolley.center = (400+s.x, 30)
-    charge.center = (400+s.x-1000*s.l*np.sin(s.theta), 1000*s.l*np.cos(s.theta))
-    pygame.display.update()
-    pygame.time.delay(int(dt*1000))
-    # input()'''
