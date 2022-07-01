@@ -6,8 +6,8 @@ from matplotlib import cm
 from IPython.display import clear_output
 
 class state:
-    m = 0.2
-    M = 1
+    m = 1
+    M = 5
     D = 0.2
     g = 9.8
 
@@ -24,7 +24,7 @@ class state:
         self.ddtheta = 0
 
         self.f1 = 0
-        self.f2 = 0
+        self.f2 = -self.m*self.g
         self.df1 = 0
         self.df2 = 0
 
@@ -57,10 +57,10 @@ class state:
             lamb = 2
             x_d, l_d = 0.5, 0.5
             epsilon1, k1 = 5, 5
-            epsilon2, k2 = 0.03, 28
-            a_x, b_x, a_t, b_t = 20, 8, 7, 140
+            epsilon2, k2 = 3, 28
+            a_x, b_x, a_t, b_t = 20*10, 8, 7*1, 140*10
             s1 = self.ddx + a_x * self.dx + b_x * (self.x - x_d) + a_t * self.dtheta + b_t * self.theta
-            a_l, b_l = 15, 36
+            a_l, b_l = 15*2, 36*0.1
             s2 = self.ddl + a_l * self.dl + b_l * (self.l - l_d)
 
             df1 = -np.sin(self.theta)*self.df2 + (self.D/self.M) * (self.f1 - self.D * self.dx + self.f2 * np.sin(self.theta)) - self.dtheta*np.cos(self.theta)*self.f2 - self.M*(a_x*self.ddx + b_x*self.dx + a_t*self.ddtheta + b_t*self.dtheta + epsilon1*self.sigmoid(lamb, s1)+k1*s1)
@@ -87,10 +87,10 @@ class state:
         return state(x, dx, l, dl, theta, dtheta)
 
 x0 = 0
-dx0 = 0
+dx0 = -0.2
 l0 = 0.35
 dl0 = 0
-theta0 = 0.3
+theta0 = 0.5
 dtheta0 = 0
 
 v0 = state(x0, dx0, l0, dl0, theta0, dtheta0)
